@@ -3,9 +3,9 @@ spring:
     name: slotlock
 
   datasource:
-    url: jdbc:mysql://localhost:3307/slotlock?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
-    username: slotlock
-    password: slotlock
+    url: ${DB_URL:jdbc:mysql://localhost:3307/slotlock?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USERNAME:slotlock}
+    password: ${DB_PASSWORD:slotlock}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -22,10 +22,15 @@ spring:
     baseline-on-migrate: true
 
   rabbitmq:
-    host: localhost
-    port: 5672
-    username: slotlock
-    password: slotlock
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:slotlock}
+    password: ${RABBITMQ_PASSWORD:slotlock}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:local-dev-only-insecure-default-change-me}
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000}
 
 server:
   port: 8080
