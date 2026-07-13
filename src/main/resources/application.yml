@@ -1,0 +1,31 @@
+spring:
+  application:
+    name: slotlock
+
+  datasource:
+    url: jdbc:mysql://localhost:3307/slotlock?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: slotlock
+    password: slotlock
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: slotlock
+    password: slotlock
+
+server:
+  port: 8080

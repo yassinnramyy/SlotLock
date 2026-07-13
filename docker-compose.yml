@@ -1,0 +1,38 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: slotlock-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: slotlock
+      MYSQL_USER: slotlock
+      MYSQL_PASSWORD: slotlock
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: slotlock-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: slotlock
+      RABBITMQ_DEFAULT_PASS: slotlock
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  mysql-data:
