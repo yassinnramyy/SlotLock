@@ -1,0 +1,555 @@
+{
+  "info": {
+    "name": "SlotLock",
+    "description": "Auth + Tenant (masterdata) endpoints for SlotLock. Run requests top-to-bottom on a fresh DB — each folder's test scripts auto-capture tokens/ids into collection variables used by later requests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "superAdminToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "staffToken", "value": "" },
+    { "key": "customerToken", "value": "" },
+    { "key": "tenantId", "value": "" },
+    { "key": "tenantSlug", "value": "acme-clinic" },
+    { "key": "resourceId", "value": "" },
+    { "key": "slotsFrom", "value": "2026-07-20" },
+    { "key": "slotsTo", "value": "2026-07-27" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register - Bootstrap SUPER_ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('superAdminToken', body.token);",
+                  "    pm.test('created SUPER_ADMIN', () => pm.expect(body.role).to.eql('SUPER_ADMIN'));",
+                  "} else {",
+                  "    pm.test('bootstrap already completed (expected on repeat runs)', () => pm.expect(pm.response.code).to.eql(403));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "register" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"super@example.com\",\n  \"password\": \"Password123\",\n  \"role\": \"SUPER_ADMIN\"\n}"
+            },
+            "description": "Only succeeds once per system — the very first SUPER_ADMIN account. A second attempt returns 403 BUSINESS_RULE_VIOLATION-style ACCESS_DENIED."
+          }
+        },
+        {
+          "name": "Register - Second SUPER_ADMIN attempt (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "register" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"super2@example.com\",\n  \"password\": \"Password123\",\n  \"role\": \"SUPER_ADMIN\"\n}"
+            },
+            "description": "Demonstrates the bootstrap lock — should always return 403 once a SUPER_ADMIN exists."
+          }
+        },
+        {
+          "name": "Register - Self-registered ADMIN attempt (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "register" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sneaky-admin@example.com\",\n  \"password\": \"Password123\",\n  \"role\": \"ADMIN\"\n}"
+            },
+            "description": "ADMIN/STAFF can never self-register — always 403. Use 'Create tenant admin' or 'Create staff' instead."
+          }
+        },
+        {
+          "name": "Register - CUSTOMER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('customerToken', pm.response.json().token);",
+                  "}",
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "register" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "description": "role omitted -> always defaults to CUSTOMER with no tenant."
+          }
+        },
+        {
+          "name": "Login - SUPER_ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('superAdminToken', pm.response.json().token);",
+                  "}",
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "login" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"super@example.com\",\n  \"password\": \"Password123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login - CUSTOMER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('customerToken', pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "login" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer1@example.com\",\n  \"password\": \"Password123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create tenant admin (SUPER_ADMIN only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{superAdminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/admins", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "admins" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tenant-admin@example.com\",\n  \"password\": \"Password123\",\n  \"tenantId\": {{tenantId}}\n}"
+            },
+            "description": "Requires {{tenantId}} to be set — run 'Tenants > Create tenant' first."
+          }
+        },
+        {
+          "name": "Create tenant admin - non-super-admin (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/admins", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "admins" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sneaky@example.com\",\n  \"password\": \"Password123\",\n  \"tenantId\": {{tenantId}}\n}"
+            }
+          }
+        },
+        {
+          "name": "Login - tenant ADMIN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.collectionVariables.set('adminToken', pm.response.json().token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "login" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tenant-admin@example.com\",\n  \"password\": \"Password123\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create staff (ADMIN only, own tenant)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.test('tenantId matches admin\\'s own tenant', () => pm.expect(pm.response.json().tenantId).to.eql(Number(pm.collectionVariables.get('tenantId'))));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/staff", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "staff" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"tenant-staff@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "description": "tenantId is never sent by the client — it's derived from the ADMIN's own JWT."
+          }
+        },
+        {
+          "name": "Create staff - non-admin (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/auth/staff", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "staff" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"sneaky-staff@example.com\",\n  \"password\": \"Password123\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "item": [
+        {
+          "name": "Create tenant (SUPER_ADMIN only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('tenantId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{superAdminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Clinic\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create tenant - non-super-admin (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"slug\": \"should-fail\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create tenant - duplicate slug (expect 409)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{superAdminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Duplicate\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "List all tenants (SUPER_ADMIN only)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{superAdminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] }
+          }
+        },
+        {
+          "name": "Get tenant by id (any authenticated role)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/tenants/{{tenantId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "{{tenantId}}" ] }
+          }
+        },
+        {
+          "name": "Get tenant by id - no token (expect 401)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/tenants/{{tenantId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "{{tenantId}}" ] }
+          }
+        },
+        {
+          "name": "Get tenant by slug (public, no auth)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/tenants/slug/{{tenantSlug}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "slug", "{{tenantSlug}}" ] }
+          }
+        },
+        {
+          "name": "Update tenant (SUPER_ADMIN only)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{superAdminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/tenants/{{tenantId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "{{tenantId}}" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Clinic (Renamed)\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete tenant - with users assigned (expect 409)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{superAdminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/tenants/{{tenantId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "{{tenantId}}" ] },
+            "description": "Fails cleanly with BUSINESS_RULE_VIOLATION once the tenant has an admin/staff assigned via the Auth folder requests above."
+          }
+        },
+        {
+          "name": "Delete tenant - not found (expect 404)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{superAdminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/tenants/999999", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "999999" ] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resources",
+      "item": [
+        {
+          "name": "Create resource with availability windows (ADMIN only)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('resourceId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/resources", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Smith - Consultation Room\",\n  \"description\": \"General consultations\",\n  \"slotDurationMinutes\": 30,\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": 1, \"startTime\": \"09:00:00\", \"endTime\": \"12:00:00\" },\n    { \"dayOfWeek\": 3, \"startTime\": \"09:00:00\", \"endTime\": \"12:00:00\" }\n  ]\n}"
+            },
+            "description": "dayOfWeek uses 0=Sunday..6=Saturday. Example: Monday + Wednesday, 9am-12pm, 30-minute slots. tenantId is never sent — it's derived from the ADMIN's own JWT."
+          }
+        },
+        {
+          "name": "Create resource - non-admin (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/resources", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": 1, \"startTime\": \"09:00:00\", \"endTime\": \"10:00:00\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Create resource - SUPER_ADMIN (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{superAdminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/resources", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": 1, \"startTime\": \"09:00:00\", \"endTime\": \"10:00:00\" }\n  ]\n}"
+            },
+            "description": "SUPER_ADMIN is scoped to tenant/admin management only, not resources/bookings — always 403 here."
+          }
+        },
+        {
+          "name": "List resources for current tenant",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/resources", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources" ] }
+          }
+        },
+        {
+          "name": "Get resource by id",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/resources/{{resourceId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "{{resourceId}}" ] }
+          }
+        },
+        {
+          "name": "Get resource by id - other tenant's id (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/resources/999999", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "999999" ] },
+            "description": "Deliberately 404 rather than 403 — never reveal that an id belongs to someone else's tenant."
+          }
+        },
+        {
+          "name": "Generate + get slots for date range",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/resources/{{resourceId}}/slots?from={{slotsFrom}}&to={{slotsTo}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "resources", "{{resourceId}}", "slots" ],
+              "query": [
+                { "key": "from", "value": "{{slotsFrom}}" },
+                { "key": "to", "value": "{{slotsTo}}" }
+              ]
+            },
+            "description": "First call generates slots for every availability window occurrence in [from, to] and returns them. Run this request again with the same range to confirm it's idempotent — same slot ids come back, nothing is duplicated."
+          }
+        },
+        {
+          "name": "Generate slots - range exceeds 90 days (expect 400)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/resources/{{resourceId}}/slots?from={{slotsFrom}}&to=2026-12-01",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "resources", "{{resourceId}}", "slots" ],
+              "query": [
+                { "key": "from", "value": "{{slotsFrom}}" },
+                { "key": "to", "value": "2026-12-01" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Generate slots - to before from (expect 400)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/resources/{{resourceId}}/slots?from={{slotsTo}}&to={{slotsFrom}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "resources", "{{resourceId}}", "slots" ],
+              "query": [
+                { "key": "from", "value": "{{slotsTo}}" },
+                { "key": "to", "value": "{{slotsFrom}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get slots - non-admin/staff/customer (expect 403)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{superAdminToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/resources/{{resourceId}}/slots?from={{slotsFrom}}&to={{slotsTo}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "resources", "{{resourceId}}", "slots" ],
+              "query": [
+                { "key": "from", "value": "{{slotsFrom}}" },
+                { "key": "to", "value": "{{slotsTo}}" }
+              ]
+            },
+            "description": "SUPER_ADMIN has no tenant, so booking endpoints are off-limits — 403."
+          }
+        }
+      ]
+    }
+  ]
+}
