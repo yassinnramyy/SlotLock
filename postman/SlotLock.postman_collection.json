@@ -548,6 +548,77 @@
             },
             "description": "SUPER_ADMIN has no tenant, so booking endpoints are off-limits — 403."
           }
+        },
+        {
+          "name": "Update resource (ADMIN only)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/resources/{{resourceId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "{{resourceId}}" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Dr. Smith - Renamed Room\",\n  \"description\": \"Updated hours\",\n  \"slotDurationMinutes\": 20,\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": 2, \"startTime\": \"13:00:00\", \"endTime\": \"15:00:00\" },\n    { \"dayOfWeek\": 4, \"startTime\": \"13:00:00\", \"endTime\": \"15:00:00\" }\n  ]\n}"
+            },
+            "description": "Full replace, same shape as create — name/description/slotDurationMinutes are overwritten and all existing availability windows are replaced with the ones sent here. Already-generated slots are left untouched."
+          }
+        },
+        {
+          "name": "Update resource - non-admin (expect 403)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/resources/{{resourceId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "{{resourceId}}" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": 1, \"startTime\": \"09:00:00\", \"endTime\": \"10:00:00\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Update resource - not found (expect 404)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/resources/999999", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "999999" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"availabilityWindows\": [\n    { \"dayOfWeek\": 1, \"startTime\": \"09:00:00\", \"endTime\": \"10:00:00\" }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Delete resource - non-admin (expect 403)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customerToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/resources/{{resourceId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "{{resourceId}}" ] }
+          }
+        },
+        {
+          "name": "Delete resource - not found (expect 404)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/resources/999999", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "999999" ] }
+          }
+        },
+        {
+          "name": "Delete resource (ADMIN only)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/resources/{{resourceId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "{{resourceId}}" ] },
+            "description": "Cascades: deletes the resource's slots and availability windows in the same transaction, then the resource itself. Blocked with 409 if any slot on this resource is BOOKED."
+          }
         }
       ]
     }

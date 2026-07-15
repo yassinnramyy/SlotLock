@@ -1,6 +1,7 @@
 package com.slotlock.booking.repository;
 
 import com.slotlock.booking.entity.Slot;
+import com.slotlock.booking.enums.SlotStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDateTime;
@@ -11,4 +12,8 @@ public interface SlotRepository extends JpaRepository<Slot, Long> {
     List<Slot> findByResourceIdAndStartAtBetween(Long resourceId, LocalDateTime from, LocalDateTime to);
 
     boolean existsByResourceIdAndStartAt(Long resourceId, LocalDateTime startAt);
+
+    boolean existsByResourceIdAndStatus(Long resourceId, SlotStatus status);
+
+    void deleteByResourceId(Long resourceId);
 }

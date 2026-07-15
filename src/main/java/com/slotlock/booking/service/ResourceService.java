@@ -12,4 +12,8 @@ public interface ResourceService {
     ResourceResponse getById(Long id);
 
     List<ResourceResponse> getAllForCurrentTenant();
+
+    ResourceResponse update(Long id, ResourceRequest request);
+
+    void delete(Long id);
 }

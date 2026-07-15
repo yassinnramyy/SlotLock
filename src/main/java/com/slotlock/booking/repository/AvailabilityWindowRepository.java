@@ -10,4 +10,6 @@ public interface AvailabilityWindowRepository extends JpaRepository<Availability
     List<AvailabilityWindow> findByResourceId(Long resourceId);
 
     List<AvailabilityWindow> findByResourceIdAndDayOfWeek(Long resourceId, Integer dayOfWeek);
+
+    void deleteByResourceId(Long resourceId);
 }
