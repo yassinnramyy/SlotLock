@@ -1,13 +1,17 @@
 package com.slotlock.application.controller;
 
+import com.slotlock.application.dto.request.AdminCreationRequest;
+import com.slotlock.application.dto.request.StaffCreationRequest;
 import com.slotlock.application.dto.request.UserLoginRequest;
 import com.slotlock.application.dto.request.UserRegistrationRequest;
 import com.slotlock.application.dto.response.UserLoginResponse;
 import com.slotlock.application.dto.response.UserRegistrationResponse;
+import com.slotlock.application.dto.response.UserSummaryResponse;
 import com.slotlock.application.service.AuthenticationService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,5 +35,17 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<UserLoginResponse> login(@Valid @RequestBody UserLoginRequest request) {
         return ResponseEntity.ok(authenticationService.login(request));
+    }
+
+    @PostMapping("/admins")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<UserSummaryResponse> createTenantAdmin(@Valid @RequestBody AdminCreationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authenticationService.createTenantAdmin(request));
+    }
+
+    @PostMapping("/staff")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<UserSummaryResponse> createStaff(@Valid @RequestBody StaffCreationRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED).body(authenticationService.createStaff(request));
     }
 }
