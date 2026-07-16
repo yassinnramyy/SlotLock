@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "SlotLock",
-    "description": "Auth + Tenant (masterdata) endpoints for SlotLock. Run requests top-to-bottom on a fresh DB — each folder's test scripts auto-capture tokens/ids into collection variables used by later requests.",
+    "description": "Auth, Tenant (masterdata), Resource/Slot, and Booking endpoints for SlotLock. Run requests top-to-bottom on a fresh DB — each folder's test scripts auto-capture tokens/ids into collection variables used by later requests. The Bookings folder exercises the intentionally naive (no locking) check-then-act booking flow; Cleanup runs last so it doesn't tear down state earlier folders depend on.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -14,7 +14,12 @@
     { "key": "tenantSlug", "value": "acme-clinic" },
     { "key": "resourceId", "value": "" },
     { "key": "slotsFrom", "value": "2026-07-20" },
-    { "key": "slotsTo", "value": "2026-07-27" }
+    { "key": "slotsTo", "value": "2026-07-27" },
+    { "key": "slotId", "value": "" },
+    { "key": "slotId2", "value": "" },
+    { "key": "bookingId", "value": "" },
+    { "key": "bookingId2", "value": "" },
+    { "key": "customer2Token", "value": "" }
   ],
   "item": [
     {
@@ -485,6 +490,27 @@
         },
         {
           "name": "Generate + get slots for date range",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const slots = pm.response.json();",
+                  "    const open = slots.filter(s => s.status === 'OPEN');",
+                  "    const currentSlotId = pm.collectionVariables.get('slotId');",
+                  "    if (!currentSlotId && open.length > 0) {",
+                  "        pm.collectionVariables.set('slotId', open[0].id);",
+                  "    } else if (currentSlotId && open.length > 0) {",
+                  "        const next = open.find(s => String(s.id) !== String(currentSlotId));",
+                  "        if (next) { pm.collectionVariables.set('slotId2', next.id); }",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
             "method": "GET",
             "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
@@ -497,7 +523,7 @@
                 { "key": "to", "value": "{{slotsTo}}" }
               ]
             },
-            "description": "First call generates slots for every availability window occurrence in [from, to] and returns them. Run this request again with the same range to confirm it's idempotent — same slot ids come back, nothing is duplicated."
+            "description": "First call generates slots for every availability window occurrence in [from, to] and returns them. Run this request again with the same range to confirm it's idempotent — same slot ids come back, nothing is duplicated. Also captures slotId (first OPEN slot) into a collection variable for the Bookings folder; re-running it after a booking captures slotId2 as a second, still-OPEN slot."
           }
         },
         {
@@ -610,14 +636,399 @@
             "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
             "url": { "raw": "{{baseUrl}}/api/resources/999999", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "999999" ] }
           }
+        }
+      ]
+    },
+    {
+      "name": "Bookings",
+      "description": "Naive (deliberately unsafe) booking flow — no row-locking, plain check-then-act on Slot.status. Run top-to-bottom; each step depends on collection variables (slotId/slotId2/bookingId/bookingId2) captured by earlier steps and by 'Resources > Generate + get slots for date range'.",
+      "item": [
+        {
+          "name": "Register - second CUSTOMER",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('customer2Token', pm.response.json().token);",
+                  "}",
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": [ "{{baseUrl}}" ], "path": [ "api", "auth", "register" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"customer2@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "description": "A second, unrelated CUSTOMER used to prove ownership checks on GET/cancel/delete."
+          }
         },
+        {
+          "name": "Book slot (CUSTOMER, expect 201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    const body = pm.response.json();",
+                  "    pm.collectionVariables.set('bookingId', body.id);",
+                  "    pm.test('status is CONFIRMED', () => pm.expect(body.status).to.eql('CONFIRMED'));",
+                  "    pm.test('slotId matches request', () => pm.expect(body.slotId).to.eql(Number(pm.collectionVariables.get('slotId'))));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": {{slotId}},\n  \"idempotencyKey\": \"postman-key-A\"\n}"
+            },
+            "description": "Requires {{slotId}} — run 'Resources > Generate + get slots for date range' first."
+          }
+        },
+        {
+          "name": "Book same slot - different idempotency key (expect 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 409', () => pm.response.to.have.status(409));",
+                  "if (pm.response.code === 409) {",
+                  "    pm.test('errorCode is SLOT_CONFLICT', () => pm.expect(pm.response.json().errorCode).to.eql('SLOT_CONFLICT'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": {{slotId}},\n  \"idempotencyKey\": \"postman-key-B\"\n}"
+            },
+            "description": "Same slot as the successful booking above, but a fresh idempotency key — the naive check-then-act sees the slot is already BOOKED and rejects it with 409."
+          }
+        },
+        {
+          "name": "Retry original booking request - same idempotency key (expect 200, no duplicate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('returns the same booking id, not a new one', () => pm.expect(pm.response.json().id).to.eql(Number(pm.collectionVariables.get('bookingId'))));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": {{slotId}},\n  \"idempotencyKey\": \"postman-key-A\"\n}"
+            },
+            "description": "Proves idempotency: the same key returns 200 with the original booking instead of re-checking the (now BOOKED) slot."
+          }
+        },
+        {
+          "name": "Get booking by id (owner)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customerToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId}}" ] }
+          }
+        },
+        {
+          "name": "Get booking by id - non-owner customer (expect 404)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customer2Token}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId}}" ] },
+            "description": "Deliberately 404 rather than 403 — never reveal that a booking id belongs to someone else."
+          }
+        },
+        {
+          "name": "Get booking by id (ADMIN can view any tenant booking)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId}}" ] }
+          }
+        },
+        {
+          "name": "List bookings (CUSTOMER sees only own)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customerToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] }
+          }
+        },
+        {
+          "name": "List bookings (ADMIN sees all tenant bookings)",
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] }
+          }
+        },
+        {
+          "name": "Refresh slots - confirm booked, capture a second OPEN slot",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const slots = pm.response.json();",
+                  "    const bookedSlot = slots.find(s => String(s.id) === String(pm.collectionVariables.get('slotId')));",
+                  "    if (bookedSlot) { pm.test('originally booked slot is now BOOKED', () => pm.expect(bookedSlot.status).to.eql('BOOKED')); }",
+                  "    const open = slots.filter(s => s.status === 'OPEN' && String(s.id) !== String(pm.collectionVariables.get('slotId')));",
+                  "    if (open.length > 0) { pm.collectionVariables.set('slotId2', open[0].id); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/resources/{{resourceId}}/slots?from={{slotsFrom}}&to={{slotsTo}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "resources", "{{resourceId}}", "slots" ],
+              "query": [
+                { "key": "from", "value": "{{slotsFrom}}" },
+                { "key": "to", "value": "{{slotsTo}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Book second slot (CUSTOMER, expect 201)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 201', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.collectionVariables.set('bookingId2', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": {{slotId2}},\n  \"idempotencyKey\": \"postman-key-C\"\n}"
+            },
+            "description": "Left CONFIRMED (not cancelled yet) on purpose, to exercise the delete-guard tests below."
+          }
+        },
+        {
+          "name": "Delete booking - still CONFIRMED (expect 409)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId2}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId2}}" ] },
+            "description": "Hard delete is only allowed for CANCELLED bookings — this one hasn't been cancelled yet."
+          }
+        },
+        {
+          "name": "Delete booking - non-admin (expect 403)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customerToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId}}" ] }
+          }
+        },
+        {
+          "name": "Cancel booking (owner)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('status is CANCELLED', () => pm.expect(pm.response.json().status).to.eql('CANCELLED'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customerToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId}}/cancel", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId}}", "cancel" ] }
+          }
+        },
+        {
+          "name": "Cancel booking - non-owner non-admin (expect 403)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customer2Token}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId2}}/cancel", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId2}}", "cancel" ] }
+          }
+        },
+        {
+          "name": "Cancel booking (ADMIN can cancel any tenant booking)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status is 200', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('status is CANCELLED', () => pm.expect(pm.response.json().status).to.eql('CANCELLED'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId2}}/cancel", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId2}}", "cancel" ] }
+          }
+        },
+        {
+          "name": "Cancel booking - not found (expect 404)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Authorization", "value": "Bearer {{customerToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/999999/cancel", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "999999", "cancel" ] }
+          }
+        },
+        {
+          "name": "Book slot - slot not found (expect 404)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{customerToken}}" }
+            ],
+            "url": { "raw": "{{baseUrl}}/api/bookings", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings" ] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"slotId\": 999999,\n  \"idempotencyKey\": \"postman-key-D\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh slots - confirm both cancelled bookings reopened their slots",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const slots = pm.response.json();",
+                  "    const slotA = slots.find(s => String(s.id) === String(pm.collectionVariables.get('slotId')));",
+                  "    const slotB = slots.find(s => String(s.id) === String(pm.collectionVariables.get('slotId2')));",
+                  "    if (slotA) { pm.test('slot A is OPEN again after cancel', () => pm.expect(slotA.status).to.eql('OPEN')); }",
+                  "    if (slotB) { pm.test('slot B is OPEN again after cancel', () => pm.expect(slotB.status).to.eql('OPEN')); }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": {
+              "raw": "{{baseUrl}}/api/resources/{{resourceId}}/slots?from={{slotsFrom}}&to={{slotsTo}}",
+              "host": [ "{{baseUrl}}" ],
+              "path": [ "api", "resources", "{{resourceId}}", "slots" ],
+              "query": [
+                { "key": "from", "value": "{{slotsFrom}}" },
+                { "key": "to", "value": "{{slotsTo}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete booking (ADMIN, now CANCELLED, expect 204)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId}}" ] }
+          }
+        },
+        {
+          "name": "Delete booking - not found (expect 404)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/999999", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "999999" ] }
+          }
+        },
+        {
+          "name": "Delete booking (ADMIN, second CANCELLED booking, expect 204)",
+          "request": {
+            "method": "DELETE",
+            "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
+            "url": { "raw": "{{baseUrl}}/api/bookings/{{bookingId2}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "bookings", "{{bookingId2}}" ] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cleanup",
+      "description": "Destructive requests that must run last so earlier folders (Bookings especially) still have a live resource/slots to work with.",
+      "item": [
         {
           "name": "Delete resource (ADMIN only)",
           "request": {
             "method": "DELETE",
             "header": [ { "key": "Authorization", "value": "Bearer {{adminToken}}" } ],
             "url": { "raw": "{{baseUrl}}/api/resources/{{resourceId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "resources", "{{resourceId}}" ] },
-            "description": "Cascades: deletes the resource's slots and availability windows in the same transaction, then the resource itself. Blocked with 409 if any slot on this resource is BOOKED."
+            "description": "Cascades: deletes the resource's slots and availability windows in the same transaction, then the resource itself. Blocked with 409 if any slot on this resource is BOOKED — all bookings above are cancelled by this point, so this should succeed."
           }
         }
       ]
