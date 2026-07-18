@@ -14,6 +14,7 @@ import com.slotlock.booking.repository.ResourceRepository;
 import com.slotlock.booking.repository.SlotRepository;
 import com.slotlock.booking.service.BookingService;
 import com.slotlock.masterdata.entity.Tenant;
+import com.slotlock.masterdata.enums.TenantCategoryEnum;
 import com.slotlock.masterdata.repository.TenantRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -114,6 +115,7 @@ class BookingConcurrencyTest {
         Tenant tenant = tenantRepository.save(Tenant.builder()
                 .name("Concurrency Test Tenant")
                 .slug("concurrency-test-" + uniqueSuffix)
+                .category(TenantCategoryEnum.OTHER)
                 .build());
         Long tenantId = tenant.getId();
 

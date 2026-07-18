@@ -67,22 +67,51 @@ public class DefaultResourceService implements ResourceService {
 
     @Override
     public ResourceResponse getById(Long id) {
-        Resource resource = resourceRepository.findByIdAndTenantId(id, SecurityUtils.getCurrentTenantId())
-                .orElseThrow(() -> new BusinessLogicViolationException(
-                        HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Resource not found"));
+        // Tenant-scoped staff can only look up their own tenant's resources (existence of other
+        // tenants' resources must not leak). Customers have no tenant of their own — see
+        // resolveBrowseTenantId — so they can look up any resource by id; the booking flow across
+        // tenants/categories depends on that.
+        Resource resource = isTenantScopedCaller()
+                ? resourceRepository.findByIdAndTenantId(id, SecurityUtils.getCurrentTenantId())
+                        .orElseThrow(() -> new BusinessLogicViolationException(
+                                HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Resource not found"))
+                : resourceRepository.findById(id)
+                        .orElseThrow(() -> new BusinessLogicViolationException(
+                                HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Resource not found"));
 
         List<AvailabilityWindow> windows = availabilityWindowRepository.findByResourceId(resource.getId());
         return resourceMapper.toResponse(resource, windows);
     }
 
     @Override
-    public List<ResourceResponse> getAllForCurrentTenant() {
-        Long tenantId = SecurityUtils.getCurrentTenantId();
+    public List<ResourceResponse> getAll(Long tenantId) {
+        Long effectiveTenantId = resolveBrowseTenantId(tenantId);
 
-        return resourceRepository.findByTenantId(tenantId).stream()
+        return resourceRepository.findByTenantId(effectiveTenantId).stream()
                 .map(resource -> resourceMapper.toResponse(
                         resource, availabilityWindowRepository.findByResourceId(resource.getId())))
                 .toList();
+    }
+
+    // ADMIN/STAFF manage only their own tenant's resources, so any tenantId they pass is ignored
+    // in favor of their own tenant context. Customers are deliberately tenant-less (they need to
+    // browse and book across every tenant/category), so they must say which tenant they want to
+    // browse.
+    private Long resolveBrowseTenantId(Long requestedTenantId) {
+        if (isTenantScopedCaller()) {
+            return SecurityUtils.getCurrentTenantId();
+        }
+
+        if (requestedTenantId == null) {
+            throw new BusinessLogicViolationException(
+                    HttpStatus.BAD_REQUEST, ApiErrorCodeEnum.VALIDATION_ERROR, "tenantId is required");
+        }
+        return requestedTenantId;
+    }
+
+    private boolean isTenantScopedCaller() {
+        String role = SecurityUtils.getCurrentUserRole();
+        return "ADMIN".equals(role) || "STAFF".equals(role);
     }
 
     @Override

@@ -11,7 +11,7 @@ public interface ResourceService {
 
     ResourceResponse getById(Long id);
 
-    List<ResourceResponse> getAllForCurrentTenant();
+    List<ResourceResponse> getAll(Long tenantId);
 
     ResourceResponse update(Long id, ResourceRequest request);
 

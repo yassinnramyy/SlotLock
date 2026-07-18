@@ -6,6 +6,7 @@ import com.slotlock.application.repository.UserRepository;
 import com.slotlock.masterdata.dto.request.TenantRequest;
 import com.slotlock.masterdata.dto.response.TenantResponse;
 import com.slotlock.masterdata.entity.Tenant;
+import com.slotlock.masterdata.enums.TenantCategoryEnum;
 import com.slotlock.masterdata.mapper.TenantMapper;
 import com.slotlock.masterdata.repository.TenantRepository;
 import com.slotlock.masterdata.service.TenantService;
@@ -56,8 +57,12 @@ public class DefaultTenantService implements TenantService {
     }
 
     @Override
-    public List<TenantResponse> getAll() {
-        return tenantRepository.findAll().stream()
+    public List<TenantResponse> getAll(TenantCategoryEnum category) {
+        List<Tenant> tenants = category != null
+                ? tenantRepository.findByCategory(category)
+                : tenantRepository.findAll();
+
+        return tenants.stream()
                 .map(tenantMapper::toResponse)
                 .toList();
     }
@@ -75,6 +80,7 @@ public class DefaultTenantService implements TenantService {
 
         tenant.setName(request.name());
         tenant.setSlug(request.slug());
+        tenant.setCategory(request.category());
         tenant = tenantRepository.save(tenant);
         return tenantMapper.toResponse(tenant);
     }

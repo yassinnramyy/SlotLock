@@ -2,6 +2,7 @@ package com.slotlock.masterdata.service;
 
 import com.slotlock.masterdata.dto.request.TenantRequest;
 import com.slotlock.masterdata.dto.response.TenantResponse;
+import com.slotlock.masterdata.enums.TenantCategoryEnum;
 
 import java.util.List;
 
@@ -13,7 +14,7 @@ public interface TenantService {
 
     TenantResponse getBySlug(String slug);
 
-    List<TenantResponse> getAll();
+    List<TenantResponse> getAll(TenantCategoryEnum category);
 
     TenantResponse update(Long id, TenantRequest request);
 

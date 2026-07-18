@@ -301,7 +301,7 @@
             "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Clinic\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+              "raw": "{\n  \"name\": \"Acme Clinic\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"category\": \"CLINIC\"\n}"
             }
           }
         },
@@ -316,7 +316,7 @@
             "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Should Fail\",\n  \"slug\": \"should-fail\"\n}"
+              "raw": "{\n  \"name\": \"Should Fail\",\n  \"slug\": \"should-fail\",\n  \"category\": \"OTHER\"\n}"
             }
           }
         },
@@ -331,7 +331,7 @@
             "url": { "raw": "{{baseUrl}}/api/tenants", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants" ] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Duplicate\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+              "raw": "{\n  \"name\": \"Duplicate\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"category\": \"CLINIC\"\n}"
             }
           }
         },
@@ -376,7 +376,7 @@
             "url": { "raw": "{{baseUrl}}/api/tenants/{{tenantId}}", "host": [ "{{baseUrl}}" ], "path": [ "api", "tenants", "{{tenantId}}" ] },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Clinic (Renamed)\",\n  \"slug\": \"{{tenantSlug}}\"\n}"
+              "raw": "{\n  \"name\": \"Acme Clinic (Renamed)\",\n  \"slug\": \"{{tenantSlug}}\",\n  \"category\": \"CLINIC\"\n}"
             }
           }
         },

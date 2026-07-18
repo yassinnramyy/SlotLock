@@ -48,9 +48,15 @@ public class DefaultSlotGenerationService implements SlotGenerationService {
 
     @Override
     public List<SlotResponse> generateAndGetSlots(Long resourceId, LocalDate from, LocalDate to) {
-        Resource resource = resourceRepository.findByIdAndTenantId(resourceId, SecurityUtils.getCurrentTenantId())
-                .orElseThrow(() -> new BusinessLogicViolationException(
-                        HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Resource not found"));
+        // Same tenant-scoping split as DefaultResourceService.getById: ADMIN/STAFF stay locked to
+        // their own tenant, customers (tenant-less) can view slots for any tenant's resource.
+        Resource resource = isTenantScopedCaller()
+                ? resourceRepository.findByIdAndTenantId(resourceId, SecurityUtils.getCurrentTenantId())
+                        .orElseThrow(() -> new BusinessLogicViolationException(
+                                HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Resource not found"))
+                : resourceRepository.findById(resourceId)
+                        .orElseThrow(() -> new BusinessLogicViolationException(
+                                HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Resource not found"));
 
         validateRange(from, to);
 
@@ -107,6 +113,11 @@ public class DefaultSlotGenerationService implements SlotGenerationService {
         return allSlots.stream()
                 .map(slotMapper::toResponse)
                 .toList();
+    }
+
+    private boolean isTenantScopedCaller() {
+        String role = SecurityUtils.getCurrentUserRole();
+        return "ADMIN".equals(role) || "STAFF".equals(role);
     }
 
     private void validateRange(LocalDate from, LocalDate to) {

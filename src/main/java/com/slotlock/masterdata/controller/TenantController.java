@@ -2,6 +2,7 @@ package com.slotlock.masterdata.controller;
 
 import com.slotlock.masterdata.dto.request.TenantRequest;
 import com.slotlock.masterdata.dto.response.TenantResponse;
+import com.slotlock.masterdata.enums.TenantCategoryEnum;
 import com.slotlock.masterdata.service.TenantService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
@@ -35,9 +37,10 @@ public class TenantController {
     }
 
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    public ResponseEntity<List<TenantResponse>> getAll() {
-        return ResponseEntity.ok(tenantService.getAll());
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'STAFF', 'CUSTOMER')")
+    public ResponseEntity<List<TenantResponse>> getAll(
+            @RequestParam(required = false) TenantCategoryEnum category) {
+        return ResponseEntity.ok(tenantService.getAll(category));
     }
 
     @GetMapping("/{id}")

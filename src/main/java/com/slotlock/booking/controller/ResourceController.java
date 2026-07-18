@@ -42,19 +42,19 @@ public class ResourceController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER')")
-    public ResponseEntity<List<ResourceResponse>> getAll() {
-        return ResponseEntity.ok(resourceService.getAllForCurrentTenant());
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER', 'SUPER_ADMIN')")
+    public ResponseEntity<List<ResourceResponse>> getAll(@RequestParam(required = false) Long tenantId) {
+        return ResponseEntity.ok(resourceService.getAll(tenantId));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER', 'SUPER_ADMIN')")
     public ResponseEntity<ResourceResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(resourceService.getById(id));
     }
 
     @GetMapping("/{id}/slots")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER', 'SUPER_ADMIN')")
     public ResponseEntity<List<SlotResponse>> getSlots(
             @PathVariable Long id,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,

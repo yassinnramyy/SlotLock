@@ -45,26 +45,26 @@ public class BookingController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER', 'SUPER_ADMIN')")
     public ResponseEntity<List<BookingResponse>> list() {
         return ResponseEntity.ok(bookingService.listForCurrentUser());
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER', 'SUPER_ADMIN')")
     public ResponseEntity<BookingResponse> getById(@PathVariable Long id) {
         return ResponseEntity.ok(bookingService.getById(id));
     }
 
     @PostMapping("/{id}/cancel")
-    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'STAFF', 'CUSTOMER', 'SUPER_ADMIN')")
     public ResponseEntity<BookingResponse> cancel(@PathVariable Long id) {
         bookingService.cancel(id);
         return ResponseEntity.ok(bookingService.getById(id));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'SUPER_ADMIN')")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         bookingService.delete(id);
         return ResponseEntity.noContent().build();

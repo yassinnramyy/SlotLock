@@ -75,6 +75,44 @@ relationships. This is a deliberate simplicity choice, keep it consistent.
   `ApiErrorCodeEnum`) or `ApiException` directly for ad hoc cases; `AppExceptionHandler`
   converts these to a consistent JSON error shape. Don't invent a new exception-response shape.
 
+## Booking-specific conventions
+
+- **Tenant-scoped vs. unscoped callers.** `ADMIN`/`STAFF` are scoped to their own tenant for
+  everything (private helper `isTenantScopedCaller()` in `DefaultResourceService` and
+  `DefaultBookingService` returns true for these two roles only). `CUSTOMER` is deliberately
+  tenant-less — customers browse and book across every tenant/category, so any code path a
+  customer hits must never call `SecurityUtils.getCurrentTenantId()` unconditionally (it throws
+  for a tenant-less caller). Where a tenant-scoped caller needs their own tenant and an unscoped
+  one needs an explicit one, see `DefaultResourceService.resolveBrowseTenantId(Long)` — the
+  pattern to follow: tenant-scoped callers use their own tenant, others must supply
+  `?tenantId=` explicitly (400 if they don't, there's no implicit fallback).
+- **`SUPER_ADMIN` access is browse/support-only, not self-booking.** They can view resources,
+  slots, and any individual booking across tenants (`isOwnerOrAdmin()` already treats them as
+  admin-equivalent), and cancel/delete bookings — but `book()`/`bookOptimistic()` deliberately
+  exclude `SUPER_ADMIN` from `@PreAuthorize`, because without an on-behalf mechanism, a
+  `SUPER_ADMIN` booking would silently be created under their own user id, which is wrong (they
+  aren't a customer). Do not add `SUPER_ADMIN` to those two endpoints without also building
+  on-behalf booking (see next point).
+- **On-behalf booking (staff/admin booking for a customer, e.g. a phone call) is a DEFERRED
+  design, not implemented.** A `customerId`-on-`BookingRequest` approach was designed and then
+  explicitly rejected — a single field whose meaning (required / optional-with-fallback /
+  ignored) silently depends on the caller's role was judged too error-prone (e.g. `ADMIN`
+  omitting `customerId` would silently self-book instead of failing, and there's no audit trail
+  distinguishing "customer booked this themselves" from "staff booked it for them"). If this
+  gets built, the intended direction is a **separate endpoint** (e.g.
+  `POST /api/bookings/on-behalf`, `ADMIN`/`STAFF`/`SUPER_ADMIN` only) with `customerId` as a
+  real `@NotNull` field enforced by bean validation, always recording a `createdByUserId`
+  alongside `customerId` — not a conditional branch on the existing `book()`/`bookOptimistic()`.
+- **Idempotency keys are strict, by design — reusing one always returns that exact row as-is,
+  regardless of its current status.** A key whose booking was since cancelled does NOT release
+  itself for a fresh attempt; calling `book()`/`bookOptimistic()` again with the same key
+  returns the `CANCELLED` row, not a new booking. This matches Stripe-style idempotency
+  semantics: a key represents one permanent attempt, not "the current state of this resource for
+  this client." A client that wants to book again after cancelling must send a NEW
+  `idempotencyKey`. Do not make the cancelled-releases-the-key behavior (Option B) the default
+  without it being a deliberate, separate decision — see comments in `book()`/`bookOptimistic()`
+  in `DefaultBookingService`.
+
 ## Build & run
 
 ```

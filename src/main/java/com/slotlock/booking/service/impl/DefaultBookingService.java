@@ -5,6 +5,7 @@ import com.slotlock.application.exception.ApiErrorCodeEnum;
 import com.slotlock.application.exception.ApiException;
 import com.slotlock.application.exception.BusinessLogicViolationException;
 import com.slotlock.application.exception.SlotConflictException;
+import com.slotlock.application.outbox.service.OutboxService;
 import com.slotlock.booking.dto.request.BookingRequest;
 import com.slotlock.booking.dto.response.BookingResponse;
 import com.slotlock.booking.entity.Booking;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class DefaultBookingService implements BookingService {
@@ -31,20 +33,34 @@ public class DefaultBookingService implements BookingService {
     private final SlotRepository slotRepository;
     private final ResourceRepository resourceRepository;
     private final BookingMapper bookingMapper;
+    private final OutboxService outboxService;
 
     public DefaultBookingService(BookingRepository bookingRepository,
                                   SlotRepository slotRepository,
                                   ResourceRepository resourceRepository,
-                                  BookingMapper bookingMapper) {
+                                  BookingMapper bookingMapper,
+                                  OutboxService outboxService) {
         this.bookingRepository = bookingRepository;
         this.slotRepository = slotRepository;
         this.resourceRepository = resourceRepository;
         this.bookingMapper = bookingMapper;
+        this.outboxService = outboxService;
     }
 
     @Override
     @Transactional
     public BookingResult book(BookingRequest request) {
+        // STRICT IDEMPOTENCY, BY DESIGN: an idempotencyKey identifies one specific booking
+        // attempt, permanently — not "the current state of this slot for this client". If a key
+        // already has a row, we return that row exactly as it is now, including CANCELLED, and
+        // never re-run the booking logic for it. This matches how Stripe and most payment APIs
+        // treat idempotency keys: reusing a key never produces a second real attempt, regardless
+        // of what happened to the original resource afterward (e.g. it was since cancelled).
+        // Deliberately NOT "smart" about cancelled bookings releasing their key for reuse — that
+        // would mean the same key could yield different outcomes on different calls, which is
+        // the exact property idempotency keys exist to prevent. A client that wants to book again
+        // after cancelling must send a NEW idempotencyKey — that's the client's responsibility,
+        // not something this method infers on their behalf.
         var existing = bookingRepository.findByIdempotencyKey(request.idempotencyKey());
         if (existing.isPresent()) {
             return new BookingResult(bookingMapper.toResponse(existing.get()), false);
@@ -83,7 +99,10 @@ public class DefaultBookingService implements BookingService {
                 .orElseThrow(() -> new BusinessLogicViolationException(
                         HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Slot not found"));
 
-        if (!resource.getTenantId().equals(SecurityUtils.getCurrentTenantId())) {
+        // Customers are deliberately tenant-less (see resolveBrowseTenantId in
+        // DefaultResourceService) so they can book any tenant's resources across every category.
+        // ADMIN/STAFF book on behalf of their own tenant only, so they stay locked to it.
+        if (isTenantScopedCaller() && !resource.getTenantId().equals(SecurityUtils.getCurrentTenantId())) {
             throw new BusinessLogicViolationException(
                     HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Slot not found");
         }
@@ -105,6 +124,9 @@ public class DefaultBookingService implements BookingService {
                 .build();
         Booking saved = bookingRepository.save(booking);
 
+        outboxService.recordEvent("BOOKING", saved.getId(), "outbox.booking_confirmed",
+                Map.of("bookingId", saved.getId(), "slotId", slot.getId(), "customerId", saved.getCustomerId()));
+
         return new BookingResult(bookingMapper.toResponse(saved), true);
     }
 
@@ -123,6 +145,10 @@ public class DefaultBookingService implements BookingService {
     @Override
     @Transactional
     public BookingResult bookOptimistic(BookingRequest request) {
+        // STRICT IDEMPOTENCY, BY DESIGN — same rule as book(), see the comment there. A key
+        // whose booking was since cancelled still short-circuits here and returns that cancelled
+        // row as-is. Re-booking after a cancellation requires a new idempotencyKey from the
+        // client; this method will never infer that intent from a reused key.
         var existing = bookingRepository.findByIdempotencyKey(request.idempotencyKey());
         if (existing.isPresent()) {
             return new BookingResult(bookingMapper.toResponse(existing.get()), false);
@@ -140,7 +166,10 @@ public class DefaultBookingService implements BookingService {
                 .orElseThrow(() -> new BusinessLogicViolationException(
                         HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Slot not found"));
 
-        if (!resource.getTenantId().equals(SecurityUtils.getCurrentTenantId())) {
+        // Customers are deliberately tenant-less (see resolveBrowseTenantId in
+        // DefaultResourceService) so they can book any tenant's resources across every category.
+        // ADMIN/STAFF book on behalf of their own tenant only, so they stay locked to it.
+        if (isTenantScopedCaller() && !resource.getTenantId().equals(SecurityUtils.getCurrentTenantId())) {
             throw new BusinessLogicViolationException(
                     HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Slot not found");
         }
@@ -188,6 +217,9 @@ public class DefaultBookingService implements BookingService {
                 .build();
         Booking saved = bookingRepository.save(booking);
 
+        outboxService.recordEvent("BOOKING", saved.getId(), "outbox.booking_confirmed",
+                Map.of("bookingId", saved.getId(), "slotId", slot.getId(), "customerId", saved.getCustomerId()));
+
         return new BookingResult(bookingMapper.toResponse(saved), true);
     }
 
@@ -211,6 +243,15 @@ public class DefaultBookingService implements BookingService {
                         HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Slot not found"));
         slot.setStatus(SlotStatus.OPEN);
         slotRepository.save(slot);
+
+        outboxService.recordEvent("BOOKING", booking.getId(), "outbox.booking_cancelled",
+                Map.of("bookingId", booking.getId(), "slotId", slot.getId(), "customerId", booking.getCustomerId()));
+
+        // Exact routing key, no "outbox." prefix — this is what RabbitMQConfig binds the
+        // waitlist promotion queue to (see waitlistPromotionBinding), distinct from the
+        // "outbox.#" wildcard the notification consumer listens on above.
+        outboxService.recordEvent("SLOT", slot.getId(), "slot.opened",
+                Map.of("slotId", slot.getId(), "resourceId", slot.getResourceId()));
     }
 
     @Override
@@ -252,7 +293,7 @@ public class DefaultBookingService implements BookingService {
                 .orElseThrow(() -> new BusinessLogicViolationException(
                         HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Booking not found"));
 
-        if (!resource.getTenantId().equals(SecurityUtils.getCurrentTenantId())) {
+        if (isTenantScopedCaller() && !resource.getTenantId().equals(SecurityUtils.getCurrentTenantId())) {
             throw new BusinessLogicViolationException(
                     HttpStatus.NOT_FOUND, ApiErrorCodeEnum.RESOURCE_NOT_FOUND, "Booking not found");
         }
@@ -264,6 +305,11 @@ public class DefaultBookingService implements BookingService {
         }
 
         bookingRepository.delete(booking);
+    }
+
+    private boolean isTenantScopedCaller() {
+        String role = SecurityUtils.getCurrentUserRole();
+        return "ADMIN".equals(role) || "STAFF".equals(role);
     }
 
     private boolean isOwnerOrAdmin(Booking booking) {
