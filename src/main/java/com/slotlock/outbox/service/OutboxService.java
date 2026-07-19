@@ -1,4 +1,4 @@
-package com.slotlock.application.outbox.service;
+package com.slotlock.outbox.service;
 
 public interface OutboxService {
 

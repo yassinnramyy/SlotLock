@@ -5,7 +5,7 @@ import com.slotlock.application.exception.ApiErrorCodeEnum;
 import com.slotlock.application.exception.ApiException;
 import com.slotlock.application.exception.BusinessLogicViolationException;
 import com.slotlock.application.exception.SlotConflictException;
-import com.slotlock.application.outbox.service.OutboxService;
+import com.slotlock.outbox.service.OutboxService;
 import com.slotlock.booking.dto.request.BookingRequest;
 import com.slotlock.booking.dto.response.BookingResponse;
 import com.slotlock.booking.entity.Booking;

@@ -1,4 +1,4 @@
-package com.slotlock.application.outbox.service;
+package com.slotlock.outbox.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.slotlock.application.config.RabbitMQConfig;

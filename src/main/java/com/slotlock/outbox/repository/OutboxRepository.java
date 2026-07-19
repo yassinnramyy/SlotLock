@@ -1,7 +1,7 @@
-package com.slotlock.application.outbox.repository;
+package com.slotlock.outbox.repository;
 
-import com.slotlock.application.outbox.entity.OutboxEvent;
-import com.slotlock.application.outbox.enums.OutboxStatus;
+import com.slotlock.outbox.entity.OutboxEvent;
+import com.slotlock.outbox.enums.OutboxStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

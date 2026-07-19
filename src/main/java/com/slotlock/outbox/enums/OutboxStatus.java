@@ -1,4 +1,4 @@
-package com.slotlock.application.outbox.enums;
+package com.slotlock.outbox.enums;
 
 public enum OutboxStatus {
     PENDING,

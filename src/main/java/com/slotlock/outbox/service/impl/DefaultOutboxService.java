@@ -1,13 +1,13 @@
-package com.slotlock.application.outbox.service.impl;
+package com.slotlock.outbox.service.impl;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.slotlock.application.exception.ApiErrorCodeEnum;
 import com.slotlock.application.exception.ApiException;
-import com.slotlock.application.outbox.entity.OutboxEvent;
-import com.slotlock.application.outbox.enums.OutboxStatus;
-import com.slotlock.application.outbox.repository.OutboxRepository;
-import com.slotlock.application.outbox.service.OutboxService;
+import com.slotlock.outbox.entity.OutboxEvent;
+import com.slotlock.outbox.enums.OutboxStatus;
+import com.slotlock.outbox.repository.OutboxRepository;
+import com.slotlock.outbox.service.OutboxService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 

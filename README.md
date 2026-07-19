@@ -122,10 +122,13 @@ already has a working local-dev default in `application.yml` that matches
 - [x] JWT auth, tiered role/user creation, tenant-scoped security context
 - [x] Resource + availability window CRUD, idempotent slot generation
 - [x] Concurrency-safe booking — proven correct under load, two strategies compared
-- [ ] Transactional outbox pattern for reliable notification delivery via RabbitMQ
-- [ ] Event-driven waitlist promotion on cancellation
+- [x] Transactional outbox pattern for reliable notification delivery via RabbitMQ
+- [x] Event-driven waitlist promotion on cancellation — reuses the real booking path,
+      including its own locking and its own outbox event, not a separate code path
 - [ ] Frontend
 - [ ] Deployment
+- [ ] On-behalf booking (staff/admin booking for a customer) — deliberately deferred, see
+      CLAUDE.md's "Booking-specific conventions" for why the first design was rejected
 
 ## A note on how this was built
 

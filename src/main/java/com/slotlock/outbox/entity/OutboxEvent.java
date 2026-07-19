@@ -1,7 +1,7 @@
-package com.slotlock.application.outbox.entity;
+package com.slotlock.outbox.entity;
 
 import com.slotlock.application.entity.BaseEntity;
-import com.slotlock.application.outbox.enums.OutboxStatus;
+import com.slotlock.outbox.enums.OutboxStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;

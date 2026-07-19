@@ -1,11 +1,11 @@
-package com.slotlock.application.outbox.service;
+package com.slotlock.outbox.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.slotlock.application.config.RabbitMQConfig;
-import com.slotlock.application.outbox.entity.OutboxEvent;
-import com.slotlock.application.outbox.enums.OutboxStatus;
-import com.slotlock.application.outbox.repository.OutboxRepository;
+import com.slotlock.outbox.entity.OutboxEvent;
+import com.slotlock.outbox.enums.OutboxStatus;
+import com.slotlock.outbox.repository.OutboxRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;

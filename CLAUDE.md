@@ -38,8 +38,12 @@ introducing a different structure.
   these into `service/` or `util/`.
 - **`masterdata/`** — `Tenant` entity/CRUD. Platform-level, created by `SUPER_ADMIN` only.
 - **`booking/`** — the core domain: `Resource`, `AvailabilityWindow`, `Slot`, `Booking`.
-- **`outbox/`** — nested infra sub-module (mirrors `eyes-clinic`'s `audit/` pattern),
-  currently empty, not yet implemented (see Status).
+- **`outbox/`** — its own top-level module (a sibling of `application`/`booking`/`masterdata`,
+  NOT nested inside `application` despite the name suggesting an `eyes-clinic`-style `audit/`
+  sub-module — that was the original plan, Claude Code reasonably deviated from it):
+  transactional outbox (`OutboxEvent`, `OutboxService.recordEvent()`, `OutboxPoller`) relaying
+  to RabbitMQ, plus `NotificationConsumer`. Implemented and wired into
+  `DefaultBookingService`'s `book()`/`bookOptimistic()`/`cancel()`. See Status.
 
 Note one inconsistency that exists and should NOT be propagated further: `application/service/`
 uses a capitalized `Impl/` package, while `masterdata/` and `booking/` correctly use lowercase
@@ -143,6 +147,18 @@ docker compose up -d          # MySQL on :3307, RabbitMQ on :5672 (mgmt UI :1567
   per thread (see class comments — these are ThreadLocal and normally only populated by
   `JwtAuthenticationFilter`/`TenantFilter`, which this test bypasses by calling the booking
   service directly).
+- Tenant `category` (`HOTEL/RESTAURANT/SALON/GYM/CLINIC/OTHER`), exposed via
+  `GET /api/tenants?category=`, so tenant-less customers can discover tenants to book with.
+- `SUPER_ADMIN` browse/support visibility on resource and booking read endpoints plus booking
+  delete (not on `book()`/`bookOptimistic()` — see On-behalf booking above).
+- `outbox/` — transactional outbox (`OutboxEvent`, `OutboxService.recordEvent()` joining the
+  caller's existing transaction, `OutboxPoller` relaying `PENDING` rows to RabbitMQ with
+  `eventType` as the routing key, `NotificationConsumer` logging relayed notifications).
+- Waitlist join/list endpoints (`WaitlistEntry`, `WaitlistService`) + `WaitlistPromotionListener`
+  consuming `slot.opened` (routed separately from the `outbox.#` notification binding) to
+  auto-book the oldest waiting entry via the same pessimistic `book()` path. Verified end-to-end
+  live: customer joins waitlist, another customer books and cancels the slot, listener promotes
+  the waitlisted customer.
 
 **Concurrency results — naive vs. pessimistic vs. optimistic (50 threads, 1 open slot):**
 
@@ -171,7 +187,6 @@ phenomenon, so "0/5 here" is evidence this implementation is less deadlock-prone
 it's architecturally immune.
 
 **Not started:**
-- `outbox/` — transactional outbox pattern for reliable notification delivery via RabbitMQ.
-- Waitlist join endpoint + `SLOT_OPENED` promotion consumer (reuses `DefaultBookingService`'s
-  eventual locked booking logic, not a separate path).
+- Real notification delivery (email/SMS) — `NotificationConsumer` currently just logs relayed
+  events.
 - Deployment (target: Elastic Beanstalk, matching an earlier project of the developer's).
